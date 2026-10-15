@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -5,12 +6,19 @@ using UnityEngine;
 /// - Beállítható cellaméret (cellSize) és rácsméret.
 /// - Gizmos segítségével kirajzolja a rácsot a Scene nézetben.
 /// - Snap to Grid: a megadott világkoordinátát a legközelebbi rácspontra igazítja.
+/// - Cellafoglaltság-nyilvántartás: egy mezõn csak egy objektum lehet.
 ///
 /// A rács az XZ síkon fekszik (a logisztikai/építõ játékoknál szokásos "talaj" sík),
 /// a GridManager objektum pozíciója adja a rács origóját.
 /// </summary>
 public class GridManager : MonoBehaviour
 {
+    /// <summary>
+    /// A foglalt cellák nyilvántartása: cella-index -> a cellán álló objektum.
+    /// Így O(1)-ben eldönthetõ, hogy egy mezõ szabad-e.
+    /// </summary>
+    private readonly Dictionary<Vector2Int, GameObject> _occupiedCells = new Dictionary<Vector2Int, GameObject>();
+
     [Header("Rács beállítások")]
     [Tooltip("Egy cella mérete világegységben.")]
     [Min(0.01f)]
@@ -76,6 +84,56 @@ public class GridManager : MonoBehaviour
             Origin.y,
             Origin.z + cell.y * cellSize
         );
+    }
+
+    // --- Cellafoglaltság ---
+
+    /// <summary>
+    /// Igaz, ha a megadott cella szabad (nincs rajta objektum).
+    /// </summary>
+    public bool IsCellFree(Vector2Int cell)
+    {
+        return !_occupiedCells.ContainsKey(cell);
+    }
+
+    /// <summary>
+    /// Igaz, ha a megadott világkoordinátához tartozó cella szabad.
+    /// </summary>
+    public bool IsWorldPositionFree(Vector3 worldPosition)
+    {
+        return IsCellFree(WorldToCell(worldPosition));
+    }
+
+    /// <summary>
+    /// Megjelöl egy cellát foglaltként a hozzá tartozó objektummal.
+    /// Visszatér hamissal, ha a cella már foglalt volt (nem írja felül).
+    /// </summary>
+    public bool OccupyCell(Vector2Int cell, GameObject occupant)
+    {
+        if (_occupiedCells.ContainsKey(cell))
+        {
+            return false;
+        }
+
+        _occupiedCells[cell] = occupant;
+        return true;
+    }
+
+    /// <summary>
+    /// Felszabadít egy cellát (pl. ha az objektumot töröljük). Igaz, ha volt mit felszabadítani.
+    /// </summary>
+    public bool FreeCell(Vector2Int cell)
+    {
+        return _occupiedCells.Remove(cell);
+    }
+
+    /// <summary>
+    /// Visszaadja a cellán álló objektumot, vagy null-t, ha a cella szabad.
+    /// </summary>
+    public GameObject GetOccupant(Vector2Int cell)
+    {
+        _occupiedCells.TryGetValue(cell, out GameObject occupant);
+        return occupant;
     }
 
     private void OnDrawGizmos()
